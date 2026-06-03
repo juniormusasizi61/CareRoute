@@ -1,35 +1,104 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
+import AuthContext from '../contexts/AuthContext';
 
 const InputPage = () => {
-  // Local-only list for now; will move to backend persistence later.
+  const { user, fetchClients, createClient } = useContext(AuthContext);
   const [clients, setClients] = useState([]);
-  const [form, setForm] = useState({ name: '', address: '' });
+  const [form, setForm] = useState({ name: '', address: '', notes: '' });
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  // Load saved clients for the authenticated user.
+  useEffect(() => {
+    if (!user) return;
+
+    const loadClients = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const result = await fetchClients();
+        setClients(result);
+      } catch (err) {
+        setError(err.message || 'Failed to load clients');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadClients();
+  }, [user, fetchClients]);
 
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
-  const addClient = (e) => {
+  const addClient = async (e) => {
     e.preventDefault();
-    if (!form.name || !form.address) return;
-    // Timestamp id is sufficient for temporary client-side entries.
-    setClients((c) => [...c, { ...form, id: Date.now() }]);
-    setForm({ name: '', address: '' });
+    if (!form.name || !form.address) {
+      setError('Please provide a client name and address.');
+      return;
+    }
+
+    try {
+      setError(null);
+      const newClient = await createClient({
+        name: form.name,
+        address: form.address,
+        notes: form.notes,
+      });
+      setClients((existing) => [newClient, ...existing]);
+      setForm({ name: '', address: '', notes: '' });
+    } catch (err) {
+      setError(err.message || 'Unable to save client');
+    }
   };
+
+  if (!user) {
+    return (
+      <div>
+        <h2>Input Client Addresses & Worker Schedules</h2>
+        <p>Please log in to save client data and connect it to your dispatcher account.</p>
+      </div>
+    );
+  }
 
   return (
     <div>
       <h2>Input Client Addresses & Worker Schedules</h2>
       <form onSubmit={addClient} style={{ marginBottom: 16 }}>
         <input name="name" placeholder="Client name" value={form.name} onChange={handleChange} />
-        <input name="address" placeholder="Address" value={form.address} onChange={handleChange} style={{ marginLeft: 8 }} />
-        <button type="submit" style={{ marginLeft: 8 }}>Add</button>
+        <input
+          name="address"
+          placeholder="Address"
+          value={form.address}
+          onChange={handleChange}
+          style={{ marginLeft: 8 }}
+        />
+        <input
+          name="notes"
+          placeholder="Notes (optional)"
+          value={form.notes}
+          onChange={handleChange}
+          style={{ marginLeft: 8 }}
+        />
+        <button type="submit" style={{ marginLeft: 8 }}>Save</button>
       </form>
 
-      <h3>Clients</h3>
-      <ul>
-        {clients.map((c) => (
-          <li key={c.id}>{c.name} — {c.address}</li>
-        ))}
-      </ul>
+      {error && <div style={{ color: 'red', marginBottom: 16 }}>{error}</div>}
+
+      <h3>Saved clients</h3>
+      {loading ? (
+        <p>Loading clients...</p>
+      ) : clients.length === 0 ? (
+        <p>No saved clients yet.</p>
+      ) : (
+        <ul>
+          {clients.map((client) => (
+            <li key={client.id}>
+              <strong>{client.name}</strong> — {client.address}
+              {client.notes ? ` (${client.notes})` : ''}
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 };

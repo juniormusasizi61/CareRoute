@@ -1,0 +1,247 @@
+--- PAGE 1 ---
+FULL-STACK SAAS DEVELOPMENT GUIDE    v1.0
+CareRoute
+Intelligent Field Service & Delivery Dispatch Planner
+A modern engineering roadmap — from architecture to production-ready SaaS
+PHASE 01
+Foundation
+01
+PHASE 02
+Map & Spatial
+02
+PHASE 03
+Routing AI
+03
+PHASE 04
+Frontend
+04
+PHASE 05
+DevSecOps
+05
+PHASE 06
+Observability
+06
+ENGINEERING PRACTICES EMBEDDED THROUGHOUT
+Version Control
+CI/CD Pipelines
+Automated Testing
+Code Reviews
+DevSecOps
+Observability & IaC
+ABOUT THIS GUIDE
+CareRoute is a logistics SaaS application that optimises field service and delivery routes using geospatial
+queries, constraint-satisfaction solvers, and real-time map visualisation. This document is your single
+source of truth: architecture decisions, database schemas, routing algorithms, authentication flows, Docker
+setup, CI/CD pipelines, and every engineering best practice required to build and ship this system
+professionally.
+CareRoute Development Roadmap    Modern Software Engineering Practices
+Confidential — Internal Engineering Use
+
+
+--- PAGE 2 ---
+CareRoute
+Intelligent Field Service & Delivery Dispatch Planner — Development Roadmap
+Page 2
+© CareRoute Engineering    Modern Software Development Guide    v1.0
+careroute.app
+Table of Contents
+1. Project Overview & System Architecture
+1.1 What CareRoute Does
+1.2 Architecture Layers Explained
+1.3 Technology Stack Rationale
+1.4 Data Flow Walkthrough
+2. Engineering Practices Framework
+2.1 Version Control & Branching Strategy
+2.2 CI/CD Pipeline Design
+2.3 Testing Pyramid
+2.4 Code Review & Collaboration Standards
+2.5 Shift-Left Security & DevSecOps
+2.6 Observability & Infrastructure as Code
+3. Phase 1 — Project Foundation & Auth
+3.1 Monorepo Setup & Toolchain
+3.2 Database Bootstrap with PostGIS
+3.3 JWT Authentication System
+3.4 User & Worker Management API
+3.5 Git Branching in Practice
+4. Phase 2 — Geospatial Layer & Map Integration
+4.1 PostGIS Schema for Locations & Routes
+4.2 Mapbox GL Integration (Frontend)
+4.3 Geocoding & Distance Matrix API
+4.4 Spatial Query Patterns
+5. Phase 3 — Route Optimisation Engine (AI/ML)
+5.1 Algorithm Selection & Rationale
+5.2 Vehicle Routing Problem (VRP) Formulation
+5.3 OR-Tools Constraint Solver
+5.4 K-Means Pre-Clustering for Scale
+5.5 Traffic & Time-Window Constraints
+5.6 Optimiser Microservice & API Contract
+6. Phase 4 — React Frontend Dashboard
+6.1 Component Architecture
+6.2 Interactive Route Map
+6.3 Dispatcher Control Panel
+6.4 Mobile-Responsive Worker View
+6.5 Real-Time Status Updates (WebSocket)
+7. Phase 5 — DevSecOps & CI/CD
+7.1 GitHub Actions Pipeline
+7.2 SAST / Dependency Scanning
+7.3 Secret Management with Vault
+7.4 Docker Compose & Container Security
+7.5 Feature Flags with Unleash
+8. Phase 6 — Observability, IaC & Production
+8.1 Structured Logging (Pino + Loki)
+8.2 Metrics & Alerting (Prometheus + Grafana)
+8.3 Distributed Tracing (OpenTelemetry)
+8.4 Terraform IaC for Cloud Infra
+8.5 Production Deployment Checklist
+9. Testing Strategy & Coverage Targets
+10. Database Schema Reference
+11. API Contract Reference
+
+
+--- PAGE 3 ---
+CareRoute
+Intelligent Field Service & Delivery Dispatch Planner — Development Roadmap
+Page 3
+© CareRoute Engineering    Modern Software Development Guide    v1.0
+careroute.app
+12. Recruiter Demo Checklist
+13. Glossary
+
+
+--- PAGE 4 ---
+CareRoute
+Intelligent Field Service & Delivery Dispatch Planner — Development Roadmap
+Page 4
+© CareRoute Engineering    Modern Software Development Guide    v1.0
+careroute.app
+PHASE
+01
+Project Overview & System Architecture
+Read this before writing a single line of code
+1.1  What CareRoute Does
+CareRoute is a SaaS logistics dispatch platform built for remote field service managers. A dispatcher uploads
+a list of client addresses and worker availability windows for the day. The backend geocodes every address,
+applies a constraint-satisfaction route-optimisation algorithm (Google OR-Tools VRP solver), and returns an
+optimised sequence of stops per worker. Routes are visualised on an interactive Mapbox map, and field
+workers receive their schedule on a mobile-responsive web view that updates in real time as jobs are
+completed, rescheduled, or cancelled.
+The platform proves mastery of geospatial data (PostGIS), combinatorial optimisation, JWT-secured
+multi-role APIs, real-time WebSocket state sync, and professional DevOps practice. These are skills at the
+top of every senior engineering job description.
+1.2  Architecture Layers Explained
+Layer
+Component
+Technology
+Responsibility
+Client (Web)
+Dispatcher
+Dashboard
+React 18 + Mapbox GL JS
+Route management, live map, job status
+Client
+(Mobile-web)
+Worker View
+React (responsive) + PWA
+View assigned stops, update job status
+API Gateway
+REST +
+WebSocket server
+Node.js + Express + Socket.io
+Auth, routing, business logic, WS broadcast
+Optimiser
+Service
+VRP solver
+microservice
+Python + FastAPI + OR-Tools
+Route optimisation, constraint solving
+Geospatial DB
+Spatial store
+PostgreSQL 15 + PostGIS 3.4
+Location data, spatial indexes, geo queries
+Cache
+Session + queue
+cache
+Redis 7
+JWT blacklist, job queues, WS room state
+External APIs
+Maps &
+Geocoding
+Mapbox API / OSRM
+self-hosted
+Geocoding, distance matrices, tile serving
+Infra / CI
+Container +
+pipeline
+Docker Compose + GitHub
+Actions
+Dev parity, automated test & deploy
+1.3  Techno
+
+--- PAGE 5 ---
+CareRoute
+Intelligent Field Service & Delivery Dispatch Planner — Development Roadmap
+Page 5
+© CareRoute Engineering    Modern Software Development Guide    v1.0
+careroute.app
+Database
+PostgreSQL 15 +
+PostGIS
+PostGIS adds ST_Distance, ST_Within, spatial indexes — no
+external geo service needed
+ORM
+Prisma 5 (Node side)
+Schema-as-code, type-safe queries, built-in migration runner
+Spatial queries
+SQLAlchemy +
+GeoAlchemy2
+Native PostGIS geometry types in Python; integrates with Alembic
+migrations
+Route optimisation
+Google OR-Tools
+(CP-SAT / VRP)
+Industry-standard open-source solver; handles time windows,
+vehicle capacity, traffic
+Pre-clustering
+scikit-learn K-Means
+Group distant stops before VRP to reduce solver search space at
+scale
+Frontend maps
+Mapbox GL JS +
+react-map-gl
+GPU-accelerated vector tiles; full route drawing, marker clustering,
+popup overlays
+Auth
+JWT (access) + refresh
+tokens
+Stateless; refresh token rotation stored in Redis for invalidation
+Real-time
+Socket.io 4
+Dispatcher sees live job completions; workers receive rerouting
+notifications
+Containers
+Docker + Docker
+Compose
+All six services (api, optimiser, db, redis, web, nginx) start with one
+command
+CI/CD
+GitHub Actions +
+Docker Hub
+Free for public repos; build→test→push→deploy on every merge to
+main
+1.4  Data Flow Walkthrough
+Every request in CareRoute follows this path from dispatcher input to worker map update:
+1. Input
+Dispatcher uploads CSV of addresses + worker schedules via React form
+2. Geocoding
+API calls Mapbox Geocoding API; stores lat/lng geometry in PostGIS
+3. Matrix fetch
+API requests a travel-time distance matrix (OSRM or Mapbox Directions)
+4. Optimise
+API enqueues a job; Python optimiser service pulls it, runs OR-Tools VRP, returns ordered stop
+lists
+5. Persist
+Optimised routes written to PostgreSQL with PostGIS geometry columns
+6. Broadcast
+Socket.io emits route_ready to the dispatcher's room; map re-renders
+7. Worker sync
+Workers open their mobile view; WebSocket delivers their sto

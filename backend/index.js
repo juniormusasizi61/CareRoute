@@ -2,20 +2,46 @@ const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
 
-// Load environment variables
 dotenv.config();
 
+const { initDatabase } = require('./db');
+const authRoutes = require('./routes/auth');
+const clientRoutes = require('./routes/clients');
+const { authenticate } = require('./middleware/authMiddleware');
+
 const app = express();
-// Keep middleware registration centralized at startup.
+
+// Allow cross-origin requests and parse incoming JSON bodies.
 app.use(cors());
 app.use(express.json());
 
-// Basic health endpoint used by Docker and local smoke tests.
+// Health endpoints for quick availability checks.
 app.get('/', (req, res) => {
-  res.send('CareRoute backend is running!');
+  res.json({ message: 'CareRoute backend is running!' });
 });
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok' });
 });
+
+// Mount auth and client APIs, protecting client routes with authentication.
+app.use('/api/auth', authRoutes);
+app.use('/api/clients', authenticate, clientRoutes);
+
+const PORT = process.env.PORT || 5000;
+
+async function start() {
+  try {
+    // Ensure database connection and schema are ready before listening.
+    await initDatabase();
+    console.log('Database initialized successfully.');
+    app.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+    });
+  } catch (err) {
+    console.error('Failed to start server:', err);
+    process.exit(1);
+  }
+}
+
+start();

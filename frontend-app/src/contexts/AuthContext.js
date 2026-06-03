@@ -1,9 +1,9 @@
-import React, { createContext, useState, useEffect } from 'react';
+import React, { createContext, useState, useEffect, useCallback } from 'react';
 
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
-  // Restore persisted session on page refresh.
+  // Restore auth state from local storage for persistent sessions.
   const [user, setUser] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem('user'));
@@ -13,13 +13,13 @@ export const AuthProvider = ({ children }) => {
   });
   const [token, setToken] = useState(() => localStorage.getItem('token') || null);
 
-  // Persist auth token so API requests can survive reloads.
+  // Persist token to local storage when it changes.
   useEffect(() => {
     if (token) localStorage.setItem('token', token);
     else localStorage.removeItem('token');
   }, [token]);
 
-  // Keep user profile in sync with auth state.
+  // Persist user metadata to local storage when it changes.
   useEffect(() => {
     if (user) localStorage.setItem('user', JSON.stringify(user));
     else localStorage.removeItem('user');
@@ -27,39 +27,67 @@ export const AuthProvider = ({ children }) => {
 
   const apiBase = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
-  const login = async (email, password) => {
-    const res = await fetch(`${apiBase}/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
-    });
-    if (!res.ok) {
-      const err = await res.text();
-      throw new Error(err || 'Login failed');
-    }
-    const data = await res.json();
-    // Accept either token/accessToken shape for backend flexibility.
-    setToken(data.token || data.accessToken || null);
-    setUser(data.user || { email });
-    return data;
-  };
+  // Generic request helper that attaches auth headers and parses JSON responses.
+  const request = useCallback(
+    async (path, options = {}) => {
+      const headers = {
+        'Content-Type': 'application/json',
+        ...(options.headers || {}),
+      };
 
-  const register = async (name, email, password) => {
-    const res = await fetch(`${apiBase}/auth/register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, email, password }),
-    });
-    if (!res.ok) {
-      const err = await res.text();
-      throw new Error(err || 'Registration failed');
-    }
-    const data = await res.json();
-    // Accept either token/accessToken shape for backend flexibility.
-    setToken(data.token || data.accessToken || null);
-    setUser(data.user || { name, email });
-    return data;
-  };
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+
+      const res = await fetch(`${apiBase}${path}`, {
+        ...options,
+        headers,
+      });
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(errorText || 'Request failed');
+      }
+
+      return res.json();
+    },
+    [apiBase, token]
+  );
+
+  // Authenticate existing user credentials and keep the session state.
+  const login = useCallback(
+    async (email, password) => {
+      const data = await request('/api/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email, password }),
+      });
+      setToken(data.token || null);
+      setUser(data.user || { email });
+      return data;
+    },
+    [request]
+  );
+
+  // Register a new user and persist the returned auth session.
+  const register = useCallback(
+    async (name, email, password) => {
+      const data = await request('/api/auth/register', {
+        method: 'POST',
+        body: JSON.stringify({ name, email, password }),
+      });
+      setToken(data.token || null);
+      setUser(data.user || { name, email });
+      return data;
+    },
+    [request]
+  );
+
+  // API helpers for client data.
+  const fetchClients = useCallback(async () => request('/api/clients'), [request]);
+  const createClient = useCallback(async (client) => request('/api/clients', {
+    method: 'POST',
+    body: JSON.stringify(client),
+  }), [request]);
 
   const logout = () => {
     setUser(null);
@@ -67,7 +95,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, login, register, logout }}>
+    <AuthContext.Provider value={{ user, token, login, register, logout, fetchClients, createClient }}>
       {children}
     </AuthContext.Provider>
   );

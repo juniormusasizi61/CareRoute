@@ -43,6 +43,8 @@ CareRoute helps logistics managers plan efficient daily routes by combining:
 - Implemented initial auth UI:
 	- login/register forms
 	- local auth state via React context + `localStorage`
+- Added backend JWT auth endpoints and PostgreSQL persistence
+- Connected frontend client input flows to the backend API
 - Integrated map page with `mapbox-gl`
 - Resolved frontend dependency/setup issues (`web-vitals`, React version alignment, map library compatibility)
 - Added purposeful, maintainable code comments in key frontend/backend files

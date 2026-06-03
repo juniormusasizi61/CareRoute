@@ -1,0 +1,315 @@
+--- PAGE 6 ---
+CareRoute
+Intelligent Field Service & Delivery Dispatch Planner — Development Roadmap
+Page 6
+© CareRoute Engineering    Modern Software Development Guide    v1.0
+careroute.app
+2. Engineering Practices Framework
+Modern software engineering is not just about writing code that works — it is about writing code that is
+maintainable, secure, testable, and deployable at any moment. The six practices below are woven into every
+phase of this project. Each subsequent section will reference which practice applies at that point in
+development.
+PRACTICE 1
+Robust Version Control & Branching
+Trunk-based development: all branches merged within 24–48 hours
+Branch naming: feat/, fix/, chore/, docs/, test/ prefixes enforced
+Conventional commits: feat(api): add JWT refresh rotation
+Protected main branch: PRs required, linear history enforced
+Git hooks (Husky): run lint + type-check before every commit
+PRACTICE 2
+Streamlined CI/CD Pipelines
+Every push to a feature branch triggers: lint → type-check → unit tests
+Merges to main trigger: full test suite → Docker build → staging deploy
+Progressive delivery: feature flags gate new route algorithms in production
+Rollback procedure documented: git revert + re-deploy < 5 minutes
+Deployment environments: local → dev → staging → production
+PRACTICE 3
+Comprehensive Automated Testing
+Testing pyramid: 70% unit, 20% integration, 10% E2E
+Coverage targets: 80%+ on optimiser service; 75%+ on API routes
+Contract tests: Pact.io validates API ↔ optimiser interface
+Playwright E2E: critical dispatcher flow tested on every PR
+Mutation testing (Stryker): validates test suite quality
+PRACTICE 4
+Code Reviews & Peer Collaboration
+All PRs require at least one approval before merge
+PR template enforces: summary, test plan, screenshot/recording for UI
+ESLint + Prettier auto-enforce style; reviewers focus on logic only
+Architecture Decision Records (ADRs) document major decisions
+Weekly sync: rotating ownership of complex modules
+PRACTICE 5
+Shift-Left Security & De
+
+--- PAGE 7 ---
+CareRoute
+Intelligent Field Service & Delivery Dispatch Planner — Development Roadmap
+Page 7
+© CareRoute Engineering    Modern Software Development Guide    v1.0
+careroute.app
+PHASE
+02
+Phase 1 — Project Foundation & Authentication
+Week 1    Days 1–6
+3.1  Monorepo Setup & Toolchain
+CareRoute uses a pnpm workspace monorepo. All Node services share TypeScript config, ESLint rules, and
+type definitions from a shared package. The Python optimiser service lives in apps/optimiser and is managed
+by Poetry.
+careroute/
+■■■ apps/
+■ ■■■ api/ # Node.js Express + Socket.io
+■ ■■■ optimiser/ # Python FastAPI + OR-Tools
+■ ■■■ web/ # React 18 + Vite
+■■■ packages/
+■ ■■■ shared-types/ # TS interfaces shared by api + web
+■ ■■■ eslint-config/ # Shared ESLint rules
+■■■ infra/
+■ ■■■ docker-compose.yml
+■ ■■■ terraform/ # IaC for cloud deployment
+■ ■■■ nginx/nginx.conf
+■■■ .github/workflows/ # CI/CD pipelines
+■■■ .husky/ # Git hooks
+■■■ pnpm-workspace.yaml
+■■■ .env.example
+Toolchain installation
+# Node toolchain
+node --version # must be 20 LTS
+npm i -g pnpm@9
+pnpm install # bootstraps all workspaces
+# Python optimiser
+cd apps/optimiser
+poetry install
+# Git hooks
+pnpm prepare # installs Husky hooks
+# Start everything
+docker compose -f infra/docker-compose.yml up -d postgres redis
+pnpm dev # starts api + web concurrently
+PRACTICE 1 APPLIED — VERSION CONTROL: GIT HOOKS
+# .husky/pre-commit
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+pnpm lint-staged # runs ESLint + Prettier on staged files only
+# .husky/commit-msg
+pnpm commitlint --edit $1 # enforces conventional commit format
+TIP
+Conventional commit format: type(scope): description — e.g. feat(api): add PostGIS
+geometry column to stops table. This creates a machine-readable git history that
+tools like semantic-release use to auto-generate changelogs and version bumps.
+
+
+--- PAGE 8 ---
+CareRoute
+Intelligent Field Service & Delivery Dispatch Planner — Development Roadmap
+Page 8
+© CareRoute Engineering    Modern Software Development Guide    v1.0
+careroute.app
+3.2  Database Bootstrap with PostGIS
+PostGIS extends PostgreSQL with spatial data types and functions. The GEOGRAPHY type stores real-world
+coordinates with automatic geodesic distance calculations. Always use GEOGRAPHY over GEOMETRY for
+lat/lng data unless you are working in a projected coordinate system.
+-- Enable PostGIS (run once after CREATE DATABASE)
+CREATE EXTENSION IF NOT EXISTS postgis;
+CREATE EXTENSION IF NOT EXISTS postgis_topology;
+CREATE EXTENSION IF NOT EXISTS pg_trgm; -- for fuzzy address search
+-- Verify
+SELECT PostGIS_Full_Version();
+Prisma schema (apps/api/prisma/schema.prisma)
+generator client {
+provider = "prisma-client-js"
+previewFeatures = ["postgresqlExtensions"]
+}
+datasource db {
+provider = "postgresql"
+url = env("DATABASE_URL")
+extensions = [postgis]
+}
+model User {
+id String @id @default(uuid())
+email String @unique
+passwordHash String
+role Role @default(DISPATCHER)
+workers Worker[]
+createdAt DateTime @default(now())
+}
+enum Role { DISPATCHER WORKER ADMIN }
+3.3  JWT Authentication System
+CareRoute uses a dual-token strategy. A short-lived access token (15 minutes) is sent in the Authorization
+header. A long-lived refresh token (7 days) is stored in an HTTP-only Secure cookie. On expiry the frontend
+silently exchanges the refresh token for a new pair. Refresh token IDs are stored in Redis with TTL; logging
+out adds the token to a Redis blocklist, making it immediately invalid.
+// apps/api/src/auth/tokens.ts
+import jwt from 'jsonwebtoken';
+import { redis } from '../lib/redis';
+export async function issueTokenPair(userId: string, role: string) {
+const accessToken = jwt.sign(
+{ sub: userId, role },
+process.env.JWT_SECRET!,
+{ expiresIn: '15m', algorithm: 'HS256' }
+);
+const refreshToken = jwt.sign(
+{ sub: userId, type: 'refresh' },
+process.env.JWT_REFRESH_SECRET!,
+
+
+--- PAGE 9 ---
+CareRoute
+Intelligent Field Service & Delivery Dispatch Planner — Development Roadmap
+Page 9
+© CareRoute Engineering    Modern Software Development Guide    v1.0
+careroute.app
+{ expiresIn: '7d' }
+);
+// Store refresh token ID in Redis with 7-day TTL
+const decoded = jwt.decode(refreshToken) as any;
+await redis.setex(`refresh:${decoded.jti}`, 7*86400, userId);
+return { accessToken, refreshToken };
+}
+export async function revokeRefreshToken(jti: string) {
+await redis.del(`refresh:${jti}`);
+}
+PRACTICE 5 APPLIED — DEVSECOPS: TOKEN SECURITY
+IMPORTANT
+Never store JWT secrets in .env files committed to the repository. Use HashiCorp
+Vault or your cloud provider's secret manager (AWS Secrets Manager, GCP Secret
+Manager). Rotate JWT_SECRET quarterly. The .env.example file should contain
+placeholder values only: JWT_SECRET=REPLACE_WITH_VAULT_VALUE.
+3.4  User & Worker Management API
+The API exposes role-based REST endpoints. Dispatchers manage workers; workers can only read their own
+assigned routes and post status updates. Middleware validates JWT and attaches the decoded user context
+to every request.
+// Endpoint summary
+POST /api/v1/auth/register - Create dispatcher account
+POST /api/v1/auth/login - Issue token pair
+POST /api/v1/auth/refresh - Exchange refresh token
+POST /api/v1/auth/logout - Revoke refresh token
+GET /api/v1/workers - List workers (DISPATCHER only)
+POST /api/v1/workers - Create worker (DISPATCHER only)
+PATCH /api/v1/workers/:id - Update schedule/availability
+POST /api/v1/jobs - Upload stops batch
+GET /api/v1/jobs/:id/routes - Get optimised routes for a job
+PATCH /api/v1/stops/:id/status - Worker marks stop complete/skipped
+3.5  Branching Strategy in Practice
+CareRoute follows trunk-based development. Feature branches are short-lived — merged within 24–48
+hours. The main branch is always deployable. Every feature is guarded by a feature flag so incomplete work
+can be merged safely without affecting users.
+Branch pattern
+Purpose
+Merge target
+Max lifetime
+main
+
+
+--- PAGE 10 ---
+CareRoute
+Intelligent Field Service & Delivery Dispatch Planner — Development Roadmap
+Page 10
+© CareRoute Engineering    Modern Software Development Guide    v1.0
+careroute.app
+# Commit message examples (Conventional Commits)
+feat(auth): add JWT refresh token rotation
+fix(optimiser): handle zero-stop edge case in VRP solver
+test(api): add integration tests for /workers endpoint
+docs(readme): add Docker Compose quickstart instructions
+chore(deps): bump OR-Tools from 9.6 to 9.8
+refactor(db): extract spatial query helpers to lib/geo.ts
+perf(routes): add GiST index on stops.location column
+ci(actions): add Snyk vulnerability scan step to PR workflow
+
+
+--- PAGE 11 ---
+CareRoute
+Intelligent Field Service & Delivery Dispatch Planner — Development Roadmap
+Page 11
+© CareRoute Engineering    Modern Software Development Guide    v1.0
+careroute.app
+PHASE
+03
+Phase 2 — Geospatial Layer & Map Integration
+Week 2    Days 7–11
+4.1  PostGIS Schema for Locations & Routes
+The geospatial schema stores three types of geometry: point locations for addresses and worker home
+bases, linestrings for route paths between stops, and polygons for service zone boundaries. All geometry is
+stored as GEOGRAPHY(type, 4326) — WGS84 coordinate system — ensuring ST_Distance returns metres
+without a projection transformation.
+-- apps/api/prisma/migrations/002_spatial.sql
+CREATE TABLE stops (
+id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+job_id UUID NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+address_raw TEXT NOT NULL,
+address_norm TEXT,
+location GEOGRAPHY(POINT, 4326) NOT NULL,
+sequence INTEGER, -- assigned by optimiser
+worker_id UUID REFERENCES workers(id),
+status stop_status NOT NULL DEFAULT 'PENDING',
+time_window_start TIMESTAMPTZ, -- earliest allowed arrival
+time_window_end TIMESTAMPTZ, -- latest allowed arrival
+service_duration INTEGER DEFAULT 900, -- seconds on-site
+completed_at TIMESTAMPTZ,
+created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE TYPE stop_status AS ENUM ('PENDING','IN_PROGRESS','COMPLETED','SKIPPED');
+-- GiST spatial index (essential for performance)
+CREATE INDEX idx_stops_location ON stops USING GIST(location);
+CREATE INDEX idx_stops_job_worker ON stops(job_id, worker_id);
+-- Route path geometry
+CREATE TABLE route_segments (
+id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+route_id UUID NOT NULL REFERENCES routes(id),
+path GEOGRAPHY(LINESTRING, 4326) NOT NULL,
+from_stop UUID REFERENCES stops(id),
+to_stop UUID REFERENCES stops(id),
+distance_m NUMERIC(10,2),
+duration_s INTEGER
+);
+Key spatial query patterns
+-- Find all stops within 5 km of a worker's current location
+SELECT s.id, s.address_norm,
+ST_Distance(s.location, ST_MakePoint($1,$2)::geogra
+
+--- PAGE 12 ---
+CareRoute
+Intelligent Field Service & Delivery Dispatch Planner — Development Roadmap
+Page 12
+© CareRoute Engineering    Modern Software Development Guide    v1.0
+careroute.app
+WHERE r.job_id = $1
+GROUP BY r.worker_id;
+4.2  Mapbox GL JS Integration (Frontend)
+The dispatcher dashboard uses react-map-gl (Mapbox GL JS wrapper for React) to render an interactive
+route map. Each worker's stops are drawn as a coloured GeoJSON layer. Route paths from the
+route_segments table are drawn as LineString layers. Clicking a stop opens a popup with job details and a
+status update button.
+// apps/web/src/components/RouteMap.tsx
+import Map, { Source, Layer, Popup, Marker } from 'react-map-gl';
+import { useRouteStore } from '@/store/routes';
+export function RouteMap() {
+const { routes, selectedStop, setSelectedStop } = useRouteStore();
+// Build GeoJSON from routes data
+const routeGeoJSON = buildRouteGeoJSON(routes);
+return (
+<Map
+mapboxAccessToken={import.meta.env.VITE_MAPBOX_TOKEN}
+mapStyle="mapbox://styles/mapbox/streets-v12"
+initialViewState={{ longitude: 36.82, latitude: -1.29, zoom: 11 }}
+>
+<Source id="routes" type="geojson" data={routeGeoJSON}>
+<Layer id="route-lines" type="line"
+paint={{ 'line-color': ['get','color'], 'line-width': 3 }}/>
+<Layer id="stop-circles" type="circle"
+paint={{ 'circle-radius': 8, 'circle-color': ['get','color'] }}/>
+</Source>
+{selectedStop && (
+<Popup longitude={selectedStop.lng} latitude={selectedStop.lat}
+onClose={() => setSelectedStop(null)}>
+<StopPopup stop={selectedStop}/>
+</Popup>
+)}
+</Map>
+);
+}
+4.3  Geocoding & Distance Matrix
+Geocoding converts raw address strings to lat/lng coordinates. We use the Mapbox Geocoding API in
+production and OSRM (Open Source Routing Machine) self-hosted for the distance matrix in development
+(free, no rate limits). The distance matrix returns an N×N table of travel times between every pair of stops —
+this is the core input to the VRP solver.
+// apps/api/src/lib/geo.ts
+export async function geocodeAddress(address

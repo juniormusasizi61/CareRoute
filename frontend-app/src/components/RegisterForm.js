@@ -39,8 +39,11 @@ const RegisterForm = () => {
         <input name="password" type="password" placeholder="Password" value={form.password} onChange={handleChange} />
       </div>
       <div style={{ marginTop: 8 }}>
-        {/* Disable submit while the registration request is in progress. */}
-        <button type="submit" disabled={loading}>
+        {/* Disable submit while the registration request is in progress or when fields are incomplete. */}
+        <button
+          type="submit"
+          disabled={loading || !form.name || !form.email || !form.password}
+        >
           {loading ? 'Registering...' : 'Register'}
         </button>
       </div>

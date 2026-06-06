@@ -46,6 +46,7 @@ CareRoute helps logistics managers plan efficient daily routes by combining:
 	- loading state and duplicate-submit prevention for auth forms
 - Added backend JWT auth endpoints and PostgreSQL persistence
 - Connected frontend client input flows to the backend API
+- Added saved client count display to the Input page
 - Integrated map page with `mapbox-gl`
 - Added unit tests for auth form loading behavior
 - Resolved frontend dependency/setup issues (`web-vitals`, React version alignment, map library compatibility)

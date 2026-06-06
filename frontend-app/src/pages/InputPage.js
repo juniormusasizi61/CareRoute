@@ -51,6 +51,9 @@ const InputPage = () => {
     }
   };
 
+  // Simple UX improvement: surface the current saved client count to the user.
+  const clientCount = clients.length;
+
   if (!user) {
     return (
       <div>
@@ -63,6 +66,9 @@ const InputPage = () => {
   return (
     <div>
       <h2>Input Client Addresses & Worker Schedules</h2>
+      <p style={{ marginTop: 0, color: '#555' }}>
+        You have {clientCount} saved client{clientCount === 1 ? '' : 's'}.
+      </p>
       <form onSubmit={addClient} style={{ marginBottom: 16 }}>
         <input name="name" placeholder="Client name" value={form.name} onChange={handleChange} />
         <input

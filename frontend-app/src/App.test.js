@@ -2,6 +2,8 @@ import React from 'react';
 import { render, screen } from '@testing-library/react';
 import { AuthProvider } from './contexts/AuthContext';
 
+import App from './App';
+
 jest.mock('mapbox-gl', () => {
   const mapInstance = { remove: jest.fn() };
   const markerInstance = {
@@ -18,8 +20,6 @@ jest.mock('mapbox-gl', () => {
     },
   };
 });
-
-import App from './App';
 
 test('renders the dashboard heading', () => {
   render(

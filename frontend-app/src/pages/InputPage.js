@@ -7,6 +7,8 @@ const InputPage = () => {
   const [form, setForm] = useState({ name: '', address: '', notes: '' });
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
+  // Track whether a new client is currently being saved to prevent duplicate submits.
+  const [saving, setSaving] = useState(false);
 
   // Load saved clients for the authenticated user.
   useEffect(() => {
@@ -39,6 +41,8 @@ const InputPage = () => {
 
     try {
       setError(null);
+      // Mark the save request as in progress so the submit button can be disabled.
+      setSaving(true);
       const newClient = await createClient({
         name: form.name,
         address: form.address,
@@ -48,6 +52,8 @@ const InputPage = () => {
       setForm({ name: '', address: '', notes: '' });
     } catch (err) {
       setError(err.message || 'Unable to save client');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -85,7 +91,14 @@ const InputPage = () => {
           onChange={handleChange}
           style={{ marginLeft: 8 }}
         />
-        <button type="submit" style={{ marginLeft: 8 }}>Save</button>
+        <button
+          type="submit"
+          // Disable while saving or when required fields are missing.
+          disabled={saving || !form.name || !form.address}
+          style={{ marginLeft: 8 }}
+        >
+          {saving ? 'Saving...' : 'Save'}
+        </button>
       </form>
 
       {error && <div style={{ color: 'red', marginBottom: 16 }}>{error}</div>}

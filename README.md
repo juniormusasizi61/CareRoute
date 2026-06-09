@@ -49,6 +49,7 @@ CareRoute helps logistics managers plan efficient daily routes by combining:
 - Added saved client count display to the Input page
 - Disabled save submit while the client save request is pending
 - Added personalized user greeting on Dashboard page
+- Added client count display in the Navbar for quick overview
 - Integrated map page with `mapbox-gl`
 - Added unit tests for auth form loading behavior
 - Resolved frontend dependency/setup issues (`web-vitals`, React version alignment, map library compatibility)

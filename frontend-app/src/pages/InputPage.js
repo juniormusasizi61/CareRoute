@@ -9,6 +9,9 @@ const InputPage = () => {
   const [loading, setLoading] = useState(true);
   // Track whether a new client is currently being saved to prevent duplicate submits.
   const [saving, setSaving] = useState(false);
+  // Track success message to display after client is saved. Set to a string with the client name
+  // when save succeeds, or null when the message should be hidden.
+  const [success, setSuccess] = useState(null);
 
   // Load saved clients for the authenticated user.
   useEffect(() => {
@@ -30,6 +33,15 @@ const InputPage = () => {
     loadClients();
   }, [user, fetchClients]);
 
+  // Auto-dismiss success message after 3 seconds. The cleanup function ensures the timer
+  // is cleared if the component unmounts or success changes before the timer fires, preventing
+  // any memory leaks or "can't update unmounted component" warnings.
+  useEffect(() => {
+    if (!success) return;
+    const timer = setTimeout(() => setSuccess(null), 3000);
+    return () => clearTimeout(timer);
+  }, [success]);
+
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
   const addClient = async (e) => {
@@ -50,6 +62,8 @@ const InputPage = () => {
       });
       setClients((existing) => [newClient, ...existing]);
       setForm({ name: '', address: '', notes: '' });
+      // Show a brief success message to confirm the save.
+      setSuccess(`${newClient.name} has been added successfully!`);
     } catch (err) {
       setError(err.message || 'Unable to save client');
     } finally {
@@ -102,6 +116,9 @@ const InputPage = () => {
       </form>
 
       {error && <div style={{ color: 'red', marginBottom: 16 }}>{error}</div>}
+      {/* Display a non-intrusive success message in green when a client is added. 
+          The message auto-dismisses after 3 seconds via the useEffect above. */}
+      {success && <div style={{ color: 'green', marginBottom: 16, fontWeight: 'bold' }}>{success}</div>}
 
       <h3>Saved clients</h3>
       {loading ? (

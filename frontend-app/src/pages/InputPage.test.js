@@ -51,3 +51,32 @@ test('disables the save button while a client save request is in progress', asyn
 
   expect(await screen.findByText('Client A', { exact: true })).toBeInTheDocument();
 });
+
+test('shows a success message when a client is saved successfully', async () => {
+  let resolveSave;
+  const fetchClientsMock = jest.fn().mockResolvedValue([]);
+  const createClientMock = jest.fn(() => new Promise((resolve) => {
+    resolveSave = resolve;
+  }));
+
+  render(
+    <AuthContext.Provider value={{ user: { id: '1', email: 'test@example.com' }, fetchClients: fetchClientsMock, createClient: createClientMock }}>
+      <InputPage />
+    </AuthContext.Provider>
+  );
+
+  await waitFor(() => expect(fetchClientsMock).toHaveBeenCalled());
+
+  fireEvent.change(screen.getByPlaceholderText(/Client name/i), { target: { value: 'Jane Doe' } });
+  fireEvent.change(screen.getByPlaceholderText(/Address/i), { target: { value: '789 Pine Rd' } });
+  const saveButton = screen.getByRole('button', { name: /save/i });
+
+  fireEvent.click(saveButton);
+
+  await act(async () => {
+    resolveSave({ id: '2', name: 'Jane Doe', address: '789 Pine Rd' });
+  });
+
+  // Verify the success message is displayed.
+  expect(screen.getByText(/Jane Doe has been added successfully/i)).toBeInTheDocument();
+});

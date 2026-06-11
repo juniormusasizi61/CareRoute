@@ -2,16 +2,16 @@ import React, { useState, useEffect, useContext } from 'react';
 import AuthContext from '../contexts/AuthContext';
 
 const InputPage = () => {
-  const { user, fetchClients, createClient } = useContext(AuthContext);
+  const { user, fetchClients, createClient, deleteClient } = useContext(AuthContext);
   const [clients, setClients] = useState([]);
   const [form, setForm] = useState({ name: '', address: '', notes: '' });
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
-  // Track whether a new client is currently being saved to prevent duplicate submits.
   const [saving, setSaving] = useState(false);
-  // Track success message to display after client is saved. Set to a string with the client name
-  // when save succeeds, or null when the message should be hidden.
+  // Track the client currently being deleted so only that row shows a loading state.
+  const [deletingClientId, setDeletingClientId] = useState(null);
   const [success, setSuccess] = useState(null);
+
 
   // Load saved clients for the authenticated user.
   useEffect(() => {
@@ -43,6 +43,23 @@ const InputPage = () => {
   }, [success]);
 
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+
+  // Confirm, call the API, and optimistically remove the client from the local list.
+  const deleteSavedClient = async (clientId, clientName) => {
+    if (!window.confirm(`Delete ${clientName}?`)) return;
+
+    try {
+      setError(null);
+      setDeletingClientId(clientId);
+      await deleteClient(clientId);
+      setClients((existing) => existing.filter((client) => client.id !== clientId));
+      setSuccess(`${clientName} has been deleted.`);
+    } catch (err) {
+      setError(err.message || 'Unable to delete client');
+    } finally {
+      setDeletingClientId(null);
+    }
+  };
 
   const addClient = async (e) => {
     e.preventDefault();
@@ -131,6 +148,14 @@ const InputPage = () => {
             <li key={client.id}>
               <strong>{client.name}</strong> — {client.address}
               {client.notes ? ` (${client.notes})` : ''}
+              <button
+                onClick={() => deleteSavedClient(client.id, client.name)}
+                // Disable only the row being deleted to keep the rest of the list interactive.
+                disabled={deletingClientId === client.id}
+                style={{ marginLeft: 8 }}
+              >
+                {deletingClientId === client.id ? 'Deleting...' : 'Delete'}
+              </button>
             </li>
           ))}
         </ul>

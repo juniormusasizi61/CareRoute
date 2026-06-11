@@ -93,6 +93,18 @@ const jwt = require('jsonwebtoken');
       }
     });
 
+    // Local delete route mirrors the production route and verifies ownership filtering.
+    app.delete('/api/clients/:id', authenticate, async (req, res) => {
+      try {
+        const deleted = await Client.destroy({ where: { id: req.params.id, userId: req.user.id } });
+        if (!deleted) return res.status(404).json({ error: 'not found' });
+        return res.status(204).send();
+      } catch (err) {
+        console.error(err);
+        return res.status(500).json({ error: 'delete fail' });
+      }
+    });
+
     const server = app.listen(0, async () => {
       const port = server.address().port;
       console.log('Test server listening on port', port);
@@ -138,6 +150,13 @@ const jwt = require('jsonwebtoken');
         const listJson = await list.json();
         console.log('list clients status', list.status, Array.isArray(listJson) ? listJson.length + ' items' : listJson);
         if (list.status !== 200) throw new Error('list clients failed');
+
+        // Delete the client created earlier to cover the full CRUD smoke path.
+        const deleted = await fetch(`${base}/api/clients/${createJson.id}`, {
+          method: 'DELETE', headers: { Authorization: `Bearer ${token}` }
+        });
+        console.log('delete client status', deleted.status);
+        if (deleted.status !== 204) throw new Error('delete client failed');
 
         console.log('INTEGRATION TESTS PASSED');
         server.close();

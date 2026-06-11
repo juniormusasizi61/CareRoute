@@ -39,4 +39,26 @@ router.post('/', async (req, res) => {
   }
 });
 
+// Remove a client that belongs to the authenticated user.
+// The userId condition prevents users from deleting another user's records.
+router.delete('/:id', async (req, res) => {
+  try {
+    const deletedCount = await Client.destroy({
+      where: {
+        id: req.params.id,
+        userId: req.user.id,
+      },
+    });
+
+    if (!deletedCount) {
+      return res.status(404).json({ error: 'Client not found.' });
+    }
+
+    return res.status(204).send();
+  } catch (err) {
+    console.error('Failed to delete client:', err);
+    return res.status(500).json({ error: 'Unable to delete client.' });
+  }
+});
+
 module.exports = router;

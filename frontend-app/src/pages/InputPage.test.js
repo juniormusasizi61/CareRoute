@@ -77,6 +77,36 @@ test('shows a success message when a client is saved successfully', async () => 
     resolveSave({ id: '2', name: 'Jane Doe', address: '789 Pine Rd' });
   });
 
-  // Verify the success message is displayed.
   expect(screen.getByText(/Jane Doe has been added successfully/i)).toBeInTheDocument();
+});
+
+test('removes a client from the list when delete succeeds', async () => {
+  const fetchClientsMock = jest.fn().mockResolvedValue([
+    { id: '1', name: 'Client A', address: '123 Main St' },
+  ]);
+  const deleteClientMock = jest.fn().mockResolvedValue({});
+
+  // Mock confirmation so the delete action can proceed without a browser prompt.
+  window.confirm = jest.fn(() => true);
+
+  render(
+    <AuthContext.Provider value={{
+      user: { id: '1', email: 'test@example.com' },
+      fetchClients: fetchClientsMock,
+      createClient: jest.fn(),
+      deleteClient: deleteClientMock,
+    }}>
+      <InputPage />
+    </AuthContext.Provider>
+  );
+
+  await waitFor(() => expect(fetchClientsMock).toHaveBeenCalled());
+  expect(await screen.findByText('Client A', { exact: true })).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole('button', { name: /delete/i }));
+
+  expect(deleteClientMock).toHaveBeenCalledWith('1');
+  // Verify both the success message and the updated empty list state.
+  expect(await screen.findByText(/Client A has been deleted/i)).toBeInTheDocument();
+  expect(await screen.findByText('No saved clients yet.')).toBeInTheDocument();
 });

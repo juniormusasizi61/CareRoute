@@ -88,6 +88,10 @@ export const AuthProvider = ({ children }) => {
     method: 'POST',
     body: JSON.stringify(client),
   }), [request]);
+  // Delete a saved client by id using the authenticated request helper.
+  const deleteClient = useCallback(async (clientId) => request(`/api/clients/${clientId}`, {
+    method: 'DELETE',
+  }), [request]);
 
   const logout = () => {
     setUser(null);
@@ -95,7 +99,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, login, register, logout, fetchClients, createClient }}>
+    <AuthContext.Provider value={{ user, token, login, register, logout, fetchClients, createClient, deleteClient }}>
       {children}
     </AuthContext.Provider>
   );

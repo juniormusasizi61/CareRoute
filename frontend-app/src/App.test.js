@@ -1,10 +1,10 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
-import { AuthProvider } from './contexts/AuthContext';
-import AuthContext from './contexts/AuthContext';
+import { render, screen, act } from '@testing-library/react';
+import AuthContext, { AuthProvider } from './contexts/AuthContext';
 
 import App from './App';
 
+// Mock Mapbox so App tests do not try to initialize a real map.
 jest.mock('mapbox-gl', () => {
   const mapInstance = { remove: jest.fn() };
   const markerInstance = {
@@ -32,19 +32,27 @@ test('renders the dashboard heading', () => {
   expect(headingElement).toBeInTheDocument();
 });
 
-test('shows personalized greeting with user name on dashboard when logged in', () => {
+test('shows personalized greeting with user name on dashboard when logged in', async () => {
   const mockUser = { id: '1', name: 'John Doe', email: 'john@example.com' };
+  // Provide a complete auth context so App renders the logged-in dashboard branch.
+  const authValue = {
+    user: mockUser,
+    token: 'token',
+    login: jest.fn(),
+    register: jest.fn(),
+    logout: jest.fn(),
+    fetchClients: jest.fn().mockResolvedValue([]),
+    createClient: jest.fn(),
+  };
 
-  const CustomAuthProvider = ({ children }) => (
-    <AuthContext.Provider value={{ user: mockUser, token: 'token', login: jest.fn(), register: jest.fn(), logout: jest.fn(), fetchClients: jest.fn(), createClient: jest.fn() }}>
-      {children}
-    </AuthContext.Provider>
-  );
+  // Wrap rendering in act because App starts async client-count loading.
+  await act(async () => {
+    render(
+      <AuthContext.Provider value={authValue}>
+        <App />
+      </AuthContext.Provider>
+    );
+  });
 
-  render(
-    <CustomAuthProvider>
-      <App />
-    </CustomAuthProvider>
-  );
-  expect(screen.getByText(/Welcome back, John Doe!/i)).toBeInTheDocument();
+  expect(await screen.findByText(/Welcome back, John Doe!/i)).toBeInTheDocument();
 });

@@ -4,12 +4,16 @@ import 'mapbox-gl/dist/mapbox-gl.css';
 import AuthContext from '../contexts/AuthContext';
 
 const MAPBOX_TOKEN = process.env.REACT_APP_MAPBOX_TOKEN;
+// Keep a stable flag so the UI can explain why the map is unavailable.
+const hasMapboxToken = Boolean(MAPBOX_TOKEN);
 
 const MapPage = () => {
   const mapContainer = useRef(null);
   const { user, fetchClients } = useContext(AuthContext);
   const [clients, setClients] = useState([]);
+  // Store API errors so the map summary can explain failed client loading.
   const [error, setError] = useState(null);
+  // Track whether the saved client list is still being fetched.
   const [loading, setLoading] = useState(true);
 
   // Load user clients for the map summary panel.
@@ -60,7 +64,14 @@ const MapPage = () => {
   return (
     <div>
       <h2>Route Map</h2>
-      <div ref={mapContainer} style={{ width: '100%', height: '60vh' }} />
+      {hasMapboxToken ? (
+        // Mapbox renders here once a token is configured.
+        <div ref={mapContainer} data-testid="map-container" style={{ width: '100%', height: '60vh' }} />
+      ) : (
+        <p style={{ color: '#666' }}>
+          Mapbox token is not configured. Add REACT_APP_MAPBOX_TOKEN to show the route map.
+        </p>
+      )}
 
       <section style={{ marginTop: 20 }}>
         <h3>Saved clients</h3>
@@ -75,6 +86,8 @@ const MapPage = () => {
             {clients.map((client) => (
               <li key={client.id}>
                 <strong>{client.name}</strong> — {client.address}
+                {/* Show optional dispatcher notes alongside the address for context. */}
+                {client.notes ? <span style={{ color: '#666' }}> — {client.notes}</span> : null}
               </li>
             ))}
           </ul>
